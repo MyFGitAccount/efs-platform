@@ -2,13 +2,13 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { MongoClient } from 'mongodb';
-import dotenv from 'dotenv';
+//import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import brevo from '@getbrevo/brevo';
 
-dotenv.config();
+//dotenv.config();
 
 const router = express.Router();
 

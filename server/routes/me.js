@@ -1,8 +1,8 @@
 import express from 'express';
 import { MongoClient } from 'mongodb';
-import dotenv from 'dotenv';
+//import dotenv from 'dotenv';
 
-dotenv.config();
+//dotenv.config();
 
 const router = express.Router();
 

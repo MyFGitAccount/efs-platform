@@ -1,11 +1,11 @@
 import express from 'express';
 import { MongoClient, ObjectId } from 'mongodb';
-import dotenv from 'dotenv';
+//import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import { nanoid } from 'nanoid';
 
-dotenv.config();
+//dotenv.config();
 
 const router = express.Router();
 
