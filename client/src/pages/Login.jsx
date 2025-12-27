@@ -38,7 +38,11 @@ const Login = () => {
         email: values.email,
         sid: values.sid,
         password: values.password,
-      });
+      }, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+     });
 
       if (response.data.ok) {
         localStorage.setItem('sid', response.data.sid);
@@ -65,7 +69,8 @@ const Login = () => {
         setError(response.data.error || 'Login failed');
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Server error');
+      console.error('Login error:', err);
+      setError(err.response?.data?.error || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }

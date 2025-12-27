@@ -1,9 +1,30 @@
+# Dependencies
 node_modules/
+client/node_modules/
+server/node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Uploads and build outputs
 uploads/
 api/uploads/
 dist/
-client/node_modules/
-server/node_modules/
+client/dist/
+
+# Editor and system files
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Vercel
+.vercel/
+
+# Local development
+.env.local
+
+# Server specific
 server/.env
-.vercel
-.env*.local

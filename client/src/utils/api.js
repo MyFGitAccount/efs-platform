@@ -2,13 +2,16 @@ import axios from 'axios';
 
 // Create an axios instance with default config
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
-  timeout: 10000,
+  baseURL: import.meta.env.DEV 
+    ? 'http://localhost:3001/api' 
+    : '/api',
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
-  withCredentials: true, // Important for cookies and CORS
+  withCredentials: true,
+  validateStatus: (status) => status >= 200 && status < 500,
 });
 
 // Request interceptor for adding auth token

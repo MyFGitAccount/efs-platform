@@ -35,14 +35,37 @@ if (!fs.existsSync(materialsDir)) {
 }
 
 // CORS configuration
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [
+      process.env.FRONTEND_URL,
+      'https://efs-platform.vercel.app',
+      'https://efs-platform-*.vercel.app',
+      'https://efs-platform-git-*.vercel.app'
+    ]
+  : [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3001'
+    ];
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL, 'https://efs-platform.vercel.app', 'https://efs-platform-git-main-myfgitaccounts-projects.vercel.app']
-    : 'http://localhost:3000',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.some(allowedOrigin => 
+      origin === allowedOrigin || 
+      allowedOrigin.includes('*') && 
+      origin.startsWith(allowedOrigin.split('*')[0])
+    )) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked for origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
-  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  optionsSuccessStatus: 200
 };
 
 // Apply CORS middleware
