@@ -129,8 +129,8 @@ async function setupDatabase() {
       const sampleCourses = [
         {
           code: 'AD113',
-          title: 'Advanced Design',
-          description: 'Advanced principles of design and visual communication.',
+          title: 'Associate of Engineering',
+          description: 'This programme aims to provide students with a broad and solid grounding in the field of engineering and information technology, and to enhance students’ technical knowledge and problem-solving skills.',
           materials: [],
           timetable: [
             { day: 'Mon', time: '09:00-11:00', room: 'ADC101', classNo: '01' },

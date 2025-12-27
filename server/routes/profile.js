@@ -51,6 +51,19 @@ router.get('/me', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/profile/credits - Get user credits
+router.get('/credits', requireAuth, async (req, res) => {
+  try {
+    res.json({ 
+      ok: true, 
+      credits: req.user.credits || 0 
+    });
+  } catch (err) {
+    console.error('Get credits error:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
 // PUT /api/profile/update - Update user profile
 router.put('/update', requireAuth, async (req, res) => {
   try {

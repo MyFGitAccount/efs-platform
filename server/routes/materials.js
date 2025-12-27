@@ -474,4 +474,58 @@ router.put('/:materialId', requireAuth, async (req, res) => {
   }
 });
 
+// Update the download endpoint in materials.js
+router.get('/download/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await connectDB();
+    
+    // Try to find by _id first (ObjectId)
+    let material;
+    try {
+      material = await db.collection('materials').findOne({ 
+        _id: id 
+      });
+    } catch (err) {
+      // If not ObjectId, try as string id
+      material = await db.collection('materials').findOne({ 
+        id: id 
+      });
+    }
+    
+    if (!material) {
+      // Try to find in courses materials array
+      const course = await db.collection('courses').findOne({
+        'materials.id': id
+      });
+      
+      if (course) {
+        material = course.materials.find(m => m.id === id);
+      }
+    }
+    
+    if (!material) {
+      return res.status(404).json({ ok: false, error: 'Material not found' });
+    }
+    
+    // Increment download count
+    await db.collection('materials').updateOne(
+      { _id: material._id || material.id },
+      { $inc: { downloads: 1 } }
+    );
+    
+    const filePath = path.join(process.cwd(), 'uploads', 'materials', material.filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ ok: false, error: 'File not found on server' });
+    }
+    
+    res.download(filePath, material.originalName);
+  } catch (err) {
+    console.error('Download material error:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
 export default router;
