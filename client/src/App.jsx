@@ -11,7 +11,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import CourseViewer from './pages/CourseViewer';
 import CourseEditor from './pages/CourseEditor';
-import EISViewer from './pages/EISViewer';
+//import EISViewer from './pages/EISViewer';
 import AdminPanel from './pages/AdminPanel';
 import AccountCreate from './pages/AccountCreate';
 import GroupFormation from './pages/GroupFormation';
@@ -66,11 +66,6 @@ function App() {
             <Route path="/courses/new" element={
               <ProtectedRoute>
                 <CourseEditor />
-              </ProtectedRoute>
-            } />
-            <Route path="/eis" element={
-              <ProtectedRoute>
-                <EISViewer />
               </ProtectedRoute>
             } />
             <Route path="/calendar" element={

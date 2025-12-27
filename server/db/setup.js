@@ -1,6 +1,12 @@
-'import { MongoClient } from 'mongodb';
+import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
 import bcrypt from 'bcrypt';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -47,6 +53,8 @@ async function setupDatabase() {
     await db.collection('users').createIndex({ email: 1 }, { unique: true });
     await db.collection('users').createIndex({ role: 1 });
     await db.collection('users').createIndex({ createdAt: -1 });
+    await db.collection('users').createIndex({ major: 1 });
+    await db.collection('users').createIndex({ year_of_study: 1 });
     
     // Pending accounts indexes
     await db.collection('pending_accounts').createIndex({ sid: 1 }, { unique: true });
@@ -64,7 +72,7 @@ async function setupDatabase() {
     await db.collection('pending_courses').createIndex({ createdAt: -1 });
     
     // Group requests indexes
-    await db.collection('group_requests').createIndex({ sid: 1 }, { unique: true });
+    await db.collection('group_requests').createIndex({ sid: 1 });
     await db.collection('group_requests').createIndex({ major: 1 });
     await db.collection('group_requests').createIndex({ status: 1 });
     await db.collection('group_requests').createIndex({ createdAt: -1 });
@@ -87,11 +95,11 @@ async function setupDatabase() {
     await db.collection('materials').createIndex({ uploadedAt: -1 });
     await db.collection('materials').createIndex({ tags: 1 });
     
-   // User timetables indexes
-   await db.collection('user_timetables').createIndex({ sid: 1 }, { unique: true });
-   await db.collection('user_timetables').createIndex({ updatedAt: -1 });
+    // User timetables indexes
+    await db.collection('user_timetables').createIndex({ sid: 1 }, { unique: true });
+    await db.collection('user_timetables').createIndex({ updatedAt: -1 });
     
-   console.log('✅ All indexes created successfully');
+    console.log('✅ All indexes created successfully');
     
     // Create default admin user if not exists
     const adminExists = await db.collection('users').findOne({ role: 'admin' });
@@ -106,10 +114,63 @@ async function setupDatabase() {
         credits: 999,
         createdAt: new Date(),
         updatedAt: new Date(),
+        major: 'Administration',
+        year_of_study: 1,
+        about_me: 'System Administrator',
       };
       
       await db.collection('users').insertOne(adminUser);
       console.log('✅ Created default admin user: admin@efs.com / admin123');
+    }
+    
+    // Create sample courses if none exist
+    const courseCount = await db.collection('courses').countDocuments();
+    if (courseCount === 0) {
+      const sampleCourses = [
+        {
+          code: 'AD113',
+          title: 'Advanced Design',
+          description: 'Advanced principles of design and visual communication.',
+          materials: [],
+          timetable: [
+            { day: 'Mon', time: '09:00-11:00', room: 'ADC101', classNo: '01' },
+            { day: 'Wed', time: '14:00-16:00', room: 'ADC101', classNo: '01' },
+          ],
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          code: 'HD101',
+          title: 'Human Development',
+          description: 'Introduction to human development across the lifespan.',
+          materials: [],
+          timetable: [
+            { day: 'Tue', time: '10:00-12:00', room: 'HPC201', classNo: '01' },
+            { day: 'Thu', time: '10:00-12:00', room: 'HPC201', classNo: '01' },
+          ],
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          code: 'CS101',
+          title: 'Computer Science Fundamentals',
+          description: 'Introduction to computer science concepts and programming.',
+          materials: [],
+          timetable: [
+            { day: 'Mon', time: '13:00-15:00', room: 'KEC301', classNo: '01' },
+            { day: 'Wed', time: '13:00-15:00', room: 'KEC301', classNo: '01' },
+            { day: 'Fri', time: '09:00-11:00', room: 'KEC301', classNo: '01' },
+          ],
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+      
+      await db.collection('courses').insertMany(sampleCourses);
+      console.log('✅ Created sample courses');
     }
     
     console.log('✅ Database setup completed successfully!');

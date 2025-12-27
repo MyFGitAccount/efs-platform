@@ -236,6 +236,90 @@ router.get('/:code/materials/:materialId/download', async (req, res) => {
   }
 });
 
+
+// GET /api/courses/list - Get all courses with details
+router.get('/list', async (req, res) => {
+  try {
+    const db = await connectDB();
+    const courses = await db.collection('courses')
+      .find({})
+      .sort({ code: 1 })
+      .toArray();
+    
+    res.json({ ok: true, data: courses });
+  } catch (err) {
+    console.error('Get courses list error:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// GET /api/courses/popular - Get popular courses
+router.get('/popular', async (req, res) => {
+  try {
+    const db = await connectDB();
+    
+    // Get courses with most materials
+    const popularCourses = await db.collection('courses')
+      .aggregate([
+        {
+          $project: {
+            code: 1,
+            title: 1,
+            description: 1,
+            materialsCount: { $size: { $ifNull: ['$materials', []] } }
+          }
+        },
+        { $sort: { materialsCount: -1 } },
+        { $limit: 10 }
+      ])
+      .toArray();
+    
+    res.json({ ok: true, data: popularCourses });
+  } catch (err) {
+    console.error('Get popular courses error:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// POST /api/courses/enroll - Enroll in a course (simplified)
+router.post('/enroll', async (req, res) => {
+  try {
+    const { sid, courseCode } = req.body;
+    
+    if (!sid || !courseCode) {
+      return res.status(400).json({ ok: false, error: 'Missing parameters' });
+    }
+    
+    const db = await connectDB();
+    
+    // Check if course exists
+    const course = await db.collection('courses').findOne({ 
+      code: courseCode.toUpperCase() 
+    });
+    
+    if (!course) {
+      return res.status(404).json({ ok: false, error: 'Course not found' });
+    }
+    
+    // Add to user's enrolled courses
+    await db.collection('users').updateOne(
+      { sid },
+      { 
+        $addToSet: { enrolledCourses: courseCode.toUpperCase() },
+        $set: { updatedAt: new Date() }
+      }
+    );
+    
+    res.json({ 
+      ok: true, 
+      message: `Enrolled in ${courseCode} successfully` 
+    });
+  } catch (err) {
+    console.error('Enroll in course error:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
 // PUT /api/courses/:code - Update course details
 router.put('/:code', async (req, res) => {
   try {

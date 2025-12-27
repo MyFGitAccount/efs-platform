@@ -251,6 +251,58 @@ router.post('/logout', (req, res) => {
   res.json({ ok: true, message: 'Logged out successfully' });
 });
 
+// GET /api/auth/session - Check session
+router.get('/session', async (req, res) => {
+  try {
+    const sid = req.headers['x-sid'] || req.query.sid;
+    if (!sid) {
+      return res.json({ ok: true, authenticated: false });
+    }
+
+    const db = await connectDB();
+    const user = await db.collection('users').findOne({ sid });
+    
+    if (!user) {
+      return res.json({ ok: true, authenticated: false });
+    }
+    
+    res.json({
+      ok: true,
+      authenticated: true,
+      user: {
+        sid: user.sid,
+        email: user.email,
+        role: user.role,
+        credits: user.credits || 0,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /api/auth/user/:sid - Get user by SID
+router.get('/user/:sid', async (req, res) => {
+  try {
+    const { sid } = req.params;
+    const db = await connectDB();
+    
+    const user = await db.collection('users').findOne(
+      { sid },
+      { projection: { password: 0, token: 0 } }
+    );
+    
+    if (!user) {
+      return res.status(404).json({ ok: false, error: 'User not found' });
+    }
+    
+    res.json({ ok: true, data: user });
+  } catch (err) {
+    console.error('Get user error:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
 // GET /api/auth/check/:sid
 router.get('/check/:sid', async (req, res) => {
   try {
