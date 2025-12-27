@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Alert, Spin } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import api from '../utils/api';
 import './Login.css';
 
 const { Title, Text } = Typography;
@@ -20,7 +20,7 @@ const Login = () => {
 
   const loadCourses = async () => {
     try {
-      const response = await axios.get('/api/courses');
+      const response = await api.get('/courses');
       if (response.data.ok) {
         setCourses(response.data.data);
       }
@@ -34,7 +34,7 @@ const Login = () => {
     setError('');
     
     try {
-      const response = await axios.post('/api/auth/login', {
+      const response = await api.post('/auth/login', {
         email: values.email,
         sid: values.sid,
         password: values.password,
@@ -43,6 +43,7 @@ const Login = () => {
       if (response.data.ok) {
         localStorage.setItem('sid', response.data.sid);
         localStorage.setItem('role', response.data.role);
+        localStorage.setItem('token', response.data.token);
         
         if (response.data.role === 'admin') {
           navigate('/admin');
