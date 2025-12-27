@@ -127,7 +127,7 @@ router.post('/login', async (req, res) => {
 
     const db = await connectDB();
     
-    // Find user by sid
+    // Find user by sid or email
     const user = await db.collection('users').findOne({ 
       $or: [{ sid }, { email: email.toLowerCase() }] 
     });
@@ -153,11 +153,15 @@ router.post('/login', async (req, res) => {
       );
     }
 
+    // Check if the user is an admin
+    const isAdmin = user.role === 'admin';
+
     res.json({
       ok: true,
       sid: user.sid,
       email: user.email,
       role: user.role || 'user',
+      isAdmin: isAdmin,
       token,
       credits: user.credits || 0,
     });
