@@ -60,7 +60,7 @@ brevoClient.setApiKey(
 // Get admin email
 async function getAdminEmail(db) {
   const admin = await db.collection('users').findOne({ role: 'admin' });
-  return admin?.email || process.env.DEFAULT_ADMIN_EMAIL || 'admin@efs.com';
+  return admin?.email || process.env.DEFAULT_ADMIN_EMAIL || 'khyhs0418@gmail.com';
 }
 
 // Send admin notification
