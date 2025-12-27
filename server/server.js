@@ -15,6 +15,7 @@ import materialRoutes from './routes/materials.js';
 import calendarRoutes from './routes/calendar.js';
 import profileRoutes from './routes/profile.js';
 import dashboardRoutes from './routes/dashboard.js';
+import uploadRoutes from './routes/upload.js';
 
 dotenv.config();
 
@@ -57,6 +58,7 @@ app.use('/api/materials', materialRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
