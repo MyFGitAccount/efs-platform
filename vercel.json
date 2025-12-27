@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/**/*.js",
+      "src": "server/server.js",
       "use": "@vercel/node"
     },
     {
@@ -16,18 +16,19 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/index.js"
+      "dest": "/server/server.js"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "/api/uploads/$1"
+      "dest": "/server/server.js"
+    },
+    {
+      "src": "/(.*\\.(ico|png|jpg|jpeg|gif|svg|css|js|woff|woff2|ttf|eot))",
+      "dest": "/client/dist/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/client/dist/$1"
+      "dest": "/client/dist/index.html"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
