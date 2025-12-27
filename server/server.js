@@ -1,0 +1,91 @@
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+// Import routes
+import authRoutes from './routes/auth.js';
+import courseRoutes from './routes/courses.js';
+import adminRoutes from './routes/admin.js';
+import groupRoutes from './routes/group.js';
+import questionnaireRoutes from './routes/questionnaire.js';
+import materialRoutes from './routes/materials.js';
+import calendarRoutes from './routes/calendar.js';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+
+// Middleware
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL || 'https://efs-platform.vercel.app'
+    : 'http://localhost:3000',
+  credentials: true,
+}));
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Serve uploads statically (for local development)
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+}
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/group', groupRoutes);
+app.use('/api/questionnaire', questionnaireRoutes);
+app.use('/api/materials', materialRoutes);
+app.use('/api/calendar', calendarRoutes);
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    ok: true, 
+    message: 'EFS Platform API is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
+});
+
+// Serve React build in production
+if (process.env.NODE_ENV === 'production') {
+  const clientDistPath = path.join(__dirname, '../client/dist');
+  
+  // Check if dist directory exists
+  app.use(express.static(clientDistPath));
+  
+  // Handle client-side routing
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    ok: false, 
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error' 
+  });
+});
+
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on port ${PORT}`);
+    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📁 API: http://localhost:${PORT}/api`);
+    console.log(`📁 Frontend: http://localhost:3000`);
+  });
+}
+
+export default app;
