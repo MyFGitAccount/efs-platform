@@ -118,7 +118,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-/*
+/* vercel is serverless in production environemnt don't use app.listen 
 // For local development
 if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 3001;
