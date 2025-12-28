@@ -2,7 +2,6 @@ import express from 'express';
 import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
 import connectDB from '../db/connection.js';
-import express from 'express';
 import {ObjectId} from "mongodb";
 
 //dotenv.config();
