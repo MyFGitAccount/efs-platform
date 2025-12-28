@@ -13,31 +13,27 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS configuration with better error handling
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:5173',
-  'https://*.vercel.app',
-  'https://*.onrender.com',
-];
-
+// CORS configuration
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, postman)
+    // Allow requests with no origin
     if (!origin) {
       return callback(null, true);
     }
     
-    // Check if origin is in allowed list
-    if (allowedOrigins.some(allowedOrigin => {
-      if (allowedOrigin.includes('*')) {
-        // Handle wildcard domains
-        const domainPattern = allowedOrigin.replace('*.', '');
-        return origin.includes(domainPattern);
-      }
-      return origin === allowedOrigin;
-    })) {
+    // In development, allow all origins
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    // Production: only allow specific origins
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:5173',
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.log('Blocked by CORS:', origin);
@@ -67,11 +63,25 @@ app.use('/api/auth', authRouter);
 app.use('/api/courses', coursesRouter);
 app.use('/api/calendar', calendarRouter);
 
+// Health check at root
+app.get('/health', (req, res) => {
+  res.json({ ok: true, status: 'healthy' });
+});
+
+// 404 handler for API routes - FIXED SYNTAX
+app.use('/api/(*)', (req, res) => {
+  res.status(404).json({ ok: false, error: 'API endpoint not found' });
+});
+
+// General 404 handler
+app.use((req, res) => {
+  res.status(404).json({ ok: false, error: 'Route not found' });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
   
-  // Handle CORS errors
   if (err.message === 'Not allowed by CORS') {
     return res.status(403).json({
       ok: false,
@@ -79,17 +89,11 @@ app.use((err, req, res, next) => {
     });
   }
   
-  // Handle other errors
   res.status(500).json({
     ok: false,
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
-});
-
-// 404 handler for API routes
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ ok: false, error: 'API endpoint not found' });
 });
 
 // Start server
