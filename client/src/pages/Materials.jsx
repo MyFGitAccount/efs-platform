@@ -14,9 +14,10 @@ import {
   Badge,
   Avatar,
   Tooltip,
-  Progress,
   Empty,
   Spin,
+  Form,
+  Input as AntInput,
 } from 'antd';
 import {
   SearchOutlined,
@@ -31,6 +32,8 @@ import {
   FileTextOutlined,
   FilterOutlined,
   SortAscendingOutlined,
+  DeleteOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import './Materials.css';
@@ -39,6 +42,7 @@ const { Title, Text } = Typography;
 const { Search } = Input;
 const { Option } = Select;
 const { Dragger } = Upload;
+const { TextArea } = AntInput;
 
 const Materials = () => {
   const [materials, setMaterials] = useState([]);
@@ -51,6 +55,8 @@ const Materials = () => {
   const [sortOrder, setSortOrder] = useState('desc');
   const [courses, setCourses] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadForm] = Form.useForm();
+  const [userSid, setUserSid] = useState('');
 
   const fileTypeIcons = {
     'pdf': <FilePdfOutlined style={{ color: '#f40' }} />,
@@ -68,6 +74,8 @@ const Materials = () => {
   };
 
   useEffect(() => {
+    const sid = localStorage.getItem('sid');
+    setUserSid(sid);
     loadMaterials();
     loadCourses();
   }, [filterCourse, sortBy, sortOrder]);
@@ -111,12 +119,12 @@ const Materials = () => {
   };
 
   const getFileIcon = (filename) => {
-    const extension = filename.split('.').pop().toLowerCase();
+    const extension = filename?.split('.').pop().toLowerCase() || '';
     return fileTypeIcons[extension] || <FileOutlined />;
   };
 
   const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
+    if (!bytes || bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -136,17 +144,21 @@ const Materials = () => {
 
   const handleDownload = async (material) => {
     try {
+      // Using the material ID for download
+      const downloadUrl = `/api/materials/download/${material._id || material.id}`;
+      
+      // Create a temporary link and trigger download
       const link = document.createElement('a');
-      link.href = `/api/materials/download/${material._id}`;
-      link.download = material.originalName;
+      link.href = downloadUrl;
+      link.setAttribute('download', material.originalName);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
       // Update download count in UI
       setMaterials(prev => prev.map(m =>
-        m._id === material._id
-          ? { ...m, downloads: m.downloads + 1 }
+        (m._id === material._id || m.id === material.id)
+          ? { ...m, downloads: (m.downloads || 0) + 1 }
           : m
       ));
 
@@ -157,33 +169,55 @@ const Materials = () => {
     }
   };
 
-  const handleUpload = async (file) => {
-    setSelectedFile(file);
-    return false; // Prevent default upload
+  const handleFileSelect = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        setSelectedFile({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          data: e.target.result // Base64 string
+        });
+        resolve(false); // Prevent default upload
+      };
+      
+      reader.onerror = () => {
+        reject(new Error('Failed to read file'));
+        message.error('Failed to read file');
+      };
+      
+      reader.readAsDataURL(file);
+    });
   };
 
   const submitUpload = async () => {
-    if (!selectedFile) {
-      message.warning('Please select a file first');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('name', selectedFile.name);
-    formData.append('description', 'Uploaded material');
-    if (filterCourse) {
-      formData.append('courseCode', filterCourse);
-    }
-
     try {
-      setUploading(true);
-      const sid = localStorage.getItem('sid');
+      const values = await uploadForm.validateFields();
       
-      const response = await axios.post(`/api/materials/course/${filterCourse || 'general'}`, formData, {
+      if (!selectedFile) {
+        message.warning('Please select a file first');
+        return;
+      }
+
+      const uploadData = {
+        fileData: selectedFile.data,
+        fileName: selectedFile.name,
+        fileType: selectedFile.type,
+        fileSize: selectedFile.size,
+        courseCode: values.courseCode,
+        name: values.name || selectedFile.name,
+        description: values.description || '',
+        tags: values.tags ? values.tags.split(',').map(tag => tag.trim()) : []
+      };
+
+      setUploading(true);
+      
+      const response = await axios.post(`/api/materials/course/${values.courseCode}`, uploadData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-          'x-sid': sid,
+          'Content-Type': 'application/json',
+          'x-sid': userSid,
         },
       });
 
@@ -191,6 +225,7 @@ const Materials = () => {
         message.success('Material uploaded successfully');
         setUploadModalVisible(false);
         setSelectedFile(null);
+        uploadForm.resetFields();
         loadMaterials();
       }
     } catch (err) {
@@ -201,6 +236,37 @@ const Materials = () => {
     }
   };
 
+  const handleDelete = async (material) => {
+    try {
+      Modal.confirm({
+        title: 'Delete Material',
+        content: `Are you sure you want to delete "${material.name}"? This action cannot be undone.`,
+        okText: 'Delete',
+        okType: 'danger',
+        cancelText: 'Cancel',
+        onOk: async () => {
+          const response = await axios.delete(`/api/materials/${material._id || material.id}`, {
+            headers: {
+              'x-sid': userSid,
+            },
+          });
+
+          if (response.data.ok) {
+            message.success('Material deleted successfully');
+            loadMaterials();
+          }
+        },
+      });
+    } catch (err) {
+      console.error('Delete failed:', err);
+      message.error('Failed to delete material');
+    }
+  };
+
+  const canDeleteMaterial = (material) => {
+    return userSid === material.uploadedBy || localStorage.getItem('role') === 'admin';
+  };
+
   const columns = [
     {
       title: 'File',
@@ -209,7 +275,7 @@ const Materials = () => {
         <div className="file-info">
           <Avatar 
             size="large" 
-            icon={getFileIcon(record.originalName)}
+            icon={getFileIcon(record.originalName || record.fileName)}
             className="file-avatar"
           />
           <div className="file-details">
@@ -217,7 +283,7 @@ const Materials = () => {
               {record.name}
             </Text>
             <div className="file-meta">
-              <Text type="secondary">{record.originalName}</Text>
+              <Text type="secondary">{record.originalName || record.fileName}</Text>
               <Tag color="blue" size="small">
                 {formatFileSize(record.size)}
               </Tag>
@@ -252,7 +318,7 @@ const Materials = () => {
       dataIndex: 'uploadedBy',
       key: 'uploadedBy',
       render: (sid) => (
-        <Tag color="purple">{sid}</Tag>
+        <Tag color={sid === userSid ? 'green' : 'purple'}>{sid}</Tag>
       ),
     },
     {
@@ -261,12 +327,13 @@ const Materials = () => {
       key: 'downloads',
       render: (count) => (
         <Badge
-          count={count}
+          count={count || 0}
           style={{ backgroundColor: '#52c41a' }}
           showZero
         />
       ),
       align: 'center',
+      sorter: (a, b) => (a.downloads || 0) - (b.downloads || 0),
     },
     {
       title: 'Upload Date',
@@ -289,6 +356,17 @@ const Materials = () => {
               size="small"
             />
           </Tooltip>
+          {canDeleteMaterial(record) && (
+            <Tooltip title="Delete">
+              <Button
+                danger
+                shape="circle"
+                icon={<DeleteOutlined />}
+                onClick={() => handleDelete(record)}
+                size="small"
+              />
+            </Tooltip>
+          )}
         </Space>
       ),
       align: 'center',
@@ -386,7 +464,7 @@ const Materials = () => {
         <Table
           columns={columns}
           dataSource={materials}
-          rowKey="_id"
+          rowKey={(record) => record._id || record.id}
           loading={loading}
           pagination={{
             pageSize: 10,
@@ -441,7 +519,7 @@ const Materials = () => {
                   <div className="file-info-grid">
                     <div>
                       <Text type="secondary">Original Name:</Text>
-                      <div>{record.originalName}</div>
+                      <div>{record.originalName || record.fileName}</div>
                     </div>
                     <div>
                       <Text type="secondary">Size:</Text>
@@ -449,11 +527,19 @@ const Materials = () => {
                     </div>
                     <div>
                       <Text type="secondary">Type:</Text>
-                      <div>{record.mimetype}</div>
+                      <div>{record.mimetype || 'Unknown'}</div>
                     </div>
                     <div>
                       <Text type="secondary">Uploaded:</Text>
                       <div>{formatDate(record.uploadedAt)}</div>
+                    </div>
+                    <div>
+                      <Text type="secondary">Storage:</Text>
+                      <div>{record.storage || 'gridfs'}</div>
+                    </div>
+                    <div>
+                      <Text type="secondary">Downloads:</Text>
+                      <div>{record.downloads || 0}</div>
                     </div>
                   </div>
                 </div>
@@ -471,9 +557,14 @@ const Materials = () => {
         onCancel={() => {
           setUploadModalVisible(false);
           setSelectedFile(null);
+          uploadForm.resetFields();
         }}
         footer={[
-          <Button key="cancel" onClick={() => setUploadModalVisible(false)}>
+          <Button key="cancel" onClick={() => {
+            setUploadModalVisible(false);
+            setSelectedFile(null);
+            uploadForm.resetFields();
+          }}>
             Cancel
           </Button>,
           <Button
@@ -481,22 +572,27 @@ const Materials = () => {
             type="primary"
             loading={uploading}
             onClick={submitUpload}
-            disabled={!selectedFile || !filterCourse}
+            disabled={!selectedFile}
           >
             {uploading ? 'Uploading...' : 'Upload'}
           </Button>,
         ]}
         width={600}
+        destroyOnClose
       >
-        <div className="upload-modal-content">
-          <div className="upload-section">
-            <Text strong>Select Course:</Text>
+        <Form
+          form={uploadForm}
+          layout="vertical"
+          initialValues={{ courseCode: filterCourse || '' }}
+        >
+          <Form.Item
+            name="courseCode"
+            label="Course"
+            rules={[{ required: true, message: 'Please select a course' }]}
+          >
             <Select
               placeholder="Choose a course"
-              style={{ width: '100%', marginTop: 8 }}
-              value={filterCourse}
-              onChange={setFilterCourse}
-              required
+              style={{ width: '100%' }}
             >
               {courses.map(course => (
                 <Option key={course.code} value={course.code}>
@@ -504,17 +600,50 @@ const Materials = () => {
                 </Option>
               ))}
             </Select>
-          </div>
+          </Form.Item>
 
-          <div className="upload-section">
-            <Text strong>Upload File:</Text>
+          <Form.Item
+            name="name"
+            label="Material Name (Optional)"
+            extra="Leave blank to use original filename"
+          >
+            <Input placeholder="Enter a custom name for the material" />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="Description (Optional)"
+          >
+            <TextArea
+              placeholder="Describe this material..."
+              rows={3}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="tags"
+            label="Tags (Optional)"
+            extra="Comma-separated tags, e.g., lecture, notes, assignment"
+          >
+            <Input placeholder="Enter tags separated by commas" />
+          </Form.Item>
+
+          <Form.Item
+            label="Upload File"
+            rules={[{ required: true, message: 'Please select a file' }]}
+          >
             <Dragger
               name="file"
               multiple={false}
-              beforeUpload={handleUpload}
+              beforeUpload={handleFileSelect}
               onRemove={() => setSelectedFile(null)}
-              fileList={selectedFile ? [selectedFile] : []}
+              fileList={selectedFile ? [{ 
+                uid: '-1', 
+                name: selectedFile.name,
+                status: 'done'
+              }] : []}
               className="upload-dragger"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt"
             >
               <p className="ant-upload-drag-icon">
                 <UploadOutlined />
@@ -523,10 +652,10 @@ const Materials = () => {
                 Click or drag file to this area to upload
               </p>
               <p className="ant-upload-hint">
-                Support for single file upload. Max file size: 20MB
+                Support for PDF, Word, Excel, PowerPoint, Images, and Text files. Max file size: 20MB
               </p>
             </Dragger>
-          </div>
+          </Form.Item>
 
           {selectedFile && (
             <div className="file-preview">
@@ -551,7 +680,7 @@ const Materials = () => {
               </div>
             </div>
           )}
-        </div>
+        </Form>
       </Modal>
     </div>
   );

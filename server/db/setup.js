@@ -5,6 +5,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -172,7 +174,23 @@ async function setupDatabase() {
       await db.collection('courses').insertMany(sampleCourses);
       console.log('✅ Created sample courses');
     }
-    
+    try {
+  await db.createCollection('uploads.files');
+  await db.createCollection('uploads.chunks');
+  console.log('✅ Created GridFS collections');
+} catch (err) {
+  if (err.codeName === 'NamespaceExists') {
+    console.log('ℹ️ GridFS collections already exist');
+  } else {
+    throw err;
+  }
+}
+
+// Add GridFS indexes
+await db.collection('uploads.files').createIndex({ filename: 1 });
+await db.collection('uploads.files').createIndex({ 'metadata.uploadedBy': 1 });
+await db.collection('uploads.files').createIndex({ 'metadata.courseCode': 1 });
+await db.collection('uploads.chunks').createIndex({ files_id: 1, n: 1 }, { unique: true });
     console.log('✅ Database setup completed successfully!');
     
   } catch (err) {
@@ -181,5 +199,8 @@ async function setupDatabase() {
     await client.close();
   }
 }
+
+
+
 
 setupDatabase();

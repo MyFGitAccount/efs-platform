@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; 
 import { 
   Card, 
   Typography, 
@@ -21,7 +21,8 @@ import {
   SaveOutlined,
   WarningOutlined,
   CheckCircleOutlined,
-  CalendarOutlined 
+  CalendarOutlined,
+  InfoCircleOutlined
 } from '@ant-design/icons';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -45,6 +46,7 @@ const Calendar = () => {
   const [conflicts, setConflicts] = useState([]);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [calendarKey, setCalendarKey] = useState(0); // Force re-render
+  const [useCalendarEventsAPI, setUseCalendarEventsAPI] = useState(false); // Toggle between APIs
   const calendarRef = useRef(null);
 
   const campusColors = {
@@ -55,9 +57,11 @@ const Calendar = () => {
     'IEC': '#8b5cf6', // Purple
     'ISP': '#ec4899', // Pink
     'KEC': '#14b8a6', // Teal
-    'KWC': '#f97316', // Orange
-    'UNC': '#84cc16', // Lime
-    'SSC': '#06b6d4', // Cyan
+    'KEE': '#f97316', // Orange
+    'KEK': '#f97316', // Orange
+    'KWC': '#84cc16', // Lime
+    'UNC': '#06b6d4', // Cyan
+    'SSC': '#8b5cf6', // Purple
   };
 
   useEffect(() => {
@@ -117,8 +121,8 @@ const Calendar = () => {
     const filtered = courses.filter(course =>
       course.code.toLowerCase().includes(term) ||
       course.title.toLowerCase().includes(term) ||
-      course.classNo.toLowerCase().includes(term) ||
-      course.campusShort?.toLowerCase().includes(term)
+      (course.classNo && course.classNo.toLowerCase().includes(term)) ||
+      (course.campusShort && course.campusShort.toLowerCase().includes(term))
     );
     setFilteredCourses(filtered);
   };
@@ -143,9 +147,42 @@ const Calendar = () => {
   };
 
   const updateCalendarEvents = () => {
+    // If using the backend events API, fetch events from backend
+    if (useCalendarEventsAPI) {
+      fetchBackendEvents();
+      return;
+    }
+
+    // Otherwise generate events locally
+    generateLocalEvents();
+  };
+
+  const fetchBackendEvents = async () => {
+    try {
+      const response = await axios.get('/api/calendar/events');
+      if (response.data.ok) {
+        // Filter events to only include selected courses
+        const selectedEventIds = selectedCourses.map(course => course.id);
+        const filteredEvents = response.data.data.filter(event => {
+          const courseCode = event.title.split(' - ')[0];
+          return selectedCourses.some(course => course.code === courseCode);
+        });
+        setCalendarEvents(filteredEvents);
+      }
+    } catch (err) {
+      console.error('Failed to fetch backend events:', err);
+      generateLocalEvents();
+    }
+  };
+
+  const generateLocalEvents = () => {
     const events = selectedCourses.map(course => {
-      const startTime = parseTime(course.startTime);
-      const endTime = parseTime(course.endTime);
+      if (!course.startTime || !course.endTime || course.weekday === undefined) {
+        return [];
+      }
+
+      const startTime = timeToMinutes(course.startTime);
+      const endTime = timeToMinutes(course.endTime);
 
       // Create events for the current week
       const eventsForWeek = [];
@@ -160,23 +197,27 @@ const Calendar = () => {
         const eventDate = new Date(monday);
         eventDate.setDate(monday.getDate() + i);
 
-        if (eventDate.getDay() === course.weekday) {
+        // Convert weekday: backend uses 0=Sunday, 1=Monday, etc.
+        if (eventDate.getDay() === (course.weekday === 0 ? 0 : course.weekday)) {
           const startDateTime = new Date(eventDate);
-          startDateTime.setHours(startTime.hours, startTime.minutes, 0, 0);
+          startDateTime.setHours(Math.floor(startTime / 60), startTime % 60, 0, 0);
 
           const endDateTime = new Date(eventDate);
-          endDateTime.setHours(endTime.hours, endTime.minutes, 0, 0);
+          endDateTime.setHours(Math.floor(endTime / 60), endTime % 60, 0, 0);
 
-          const campusColor = campusColors[course.campusShort] || '#6b7280';
+          const campusColor = campusColors[course.campusShort] || course.color || '#6b7280';
 
           eventsForWeek.push({
             id: `${course.id}-${i}`,
-            title: `${course.code} ${course.classNo ? `- ${course.classNo}` : ''}`,
+            title: `${course.code}${course.classNo ? ` - ${course.classNo}` : ''}`,
             extendedProps: {
               fullTitle: course.title,
               room: course.room,
               campus: course.campus,
+              campusShort: course.campusShort,
               classNo: course.classNo,
+              instructor: course.instructor || '',
+              description: course.description || '',
             },
             start: startDateTime,
             end: endDateTime,
@@ -192,17 +233,28 @@ const Calendar = () => {
     }).flat();
 
     setCalendarEvents(events);
-    setCalendarKey(prev => prev + 1); // Force calendar update
+    setCalendarKey(prev => prev + 1);
   };
 
-  const parseTime = (timeString) => {
-    const [time, modifier] = timeString.split(/(am|pm)/i);
-    let [hours, minutes] = time.split(':').map(Number);
+  // Helper function to convert time string to minutes
+  const timeToMinutes = (timeString) => {
+    if (!timeString) return 0;
     
-    if (modifier?.toLowerCase() === 'pm' && hours < 12) hours += 12;
-    if (modifier?.toLowerCase() === 'am' && hours === 12) hours = 0;
+    // Handle both "09:30" and "9:30am" formats
+    const timePart = timeString.split(' ')[0]; // Get "09:30" from "09:30am"
+    const [hours, minutes] = timePart.split(':').map(Number);
     
-    return { hours, minutes: minutes || 0 };
+    // Check if it's PM and adjust if needed
+    if (timeString.toLowerCase().includes('pm') && hours < 12) {
+      return (hours + 12) * 60 + (minutes || 0);
+    }
+    
+    // Check if it's AM and hours is 12
+    if (timeString.toLowerCase().includes('am') && hours === 12) {
+      return 0 + (minutes || 0);
+    }
+    
+    return hours * 60 + (minutes || 0);
   };
 
   const handleAddCourse = (course) => {
@@ -261,13 +313,20 @@ const Calendar = () => {
 
   const handleExportImage = async () => {
     try {
-      const calendarElement = document.querySelector('.calendar-container');
-      if (!calendarElement) return;
+      const calendarElement = document.querySelector('.calendar-card');
+      if (!calendarElement) {
+        notification.warning({
+          message: 'Warning',
+          description: 'Calendar element not found for export.',
+        });
+        return;
+      }
 
       const canvas = await html2canvas(calendarElement, {
         scale: 2,
         backgroundColor: '#ffffff',
         logging: false,
+        useCORS: true,
       });
 
       const link = document.createElement('a');
@@ -341,6 +400,14 @@ const Calendar = () => {
           </Space>
         </div>
         
+        {course.description && (
+          <div className="course-description">
+            <Typography.Text type="secondary" ellipsis>
+              {course.description}
+            </Typography.Text>
+          </div>
+        )}
+        
         {isAdded && (
           <div className="course-actions">
             <Button 
@@ -373,6 +440,14 @@ const Calendar = () => {
         </div>
         
         <Space>
+          <Tooltip title="Toggle between local and server-side event generation">
+            <Button 
+              icon={<InfoCircleOutlined />}
+              onClick={() => setUseCalendarEventsAPI(!useCalendarEventsAPI)}
+            >
+              {useCalendarEventsAPI ? 'Using Server Events' : 'Using Local Events'}
+            </Button>
+          </Tooltip>
           <Button 
             icon={<SaveOutlined />}
             onClick={handleSaveTimetable}
@@ -499,6 +574,9 @@ const Calendar = () => {
                           hour: '2-digit', 
                           minute: '2-digit' 
                         })}</p>
+                        {info.event.extendedProps.description && (
+                          <p><strong>Description:</strong> {info.event.extendedProps.description}</p>
+                        )}
                       </div>
                     ),
                   });
@@ -549,6 +627,7 @@ const Calendar = () => {
                           <Text type="secondary">{course.title}</Text>
                           <Tag size="small">{course.day} {course.startTime}-{course.endTime}</Tag>
                           <Tag size="small" color="blue">{course.room}</Tag>
+                          <Tag size="small" color="orange">{course.campusShort}</Tag>
                         </Space>
                       }
                     />

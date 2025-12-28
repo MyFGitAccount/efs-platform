@@ -1,27 +1,15 @@
 import express from 'express';
 import { ObjectId } from 'mongodb';
-import multer from 'multer';
+// Remove multer import - not compatible with Vercel
+// import multer from 'multer';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import connectDB from '../db/connection.js';
 
-//dotenv.config();
-
 const router = express.Router();
 
-// Multer setup for course materials
-const materialUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, 'uploads/materials/');
-    },
-    filename: (req, file, cb) => {
-      const uniqueName = `${Date.now()}_${nanoid(10)}${path.extname(file.originalname)}`;
-      cb(null, uniqueName);
-    },
-  }),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-});
+// NOTE: File upload is disabled for Vercel compatibility
+// For production, use cloud storage like AWS S3, Cloudinary, or Firebase Storage
 
 // GET /api/courses - Get all courses
 router.get('/', async (req, res) => {
@@ -141,19 +129,22 @@ router.post('/request', async (req, res) => {
   }
 });
 
-// POST /api/courses/:code/materials - Upload course material
-router.post('/:code/materials', materialUpload.single('file'), async (req, res) => {
+// POST /api/courses/:code/materials - Upload course material (Cloud Storage version)
+router.post('/:code/materials', async (req, res) => {
   try {
     const { code } = req.params;
-    const { name, description } = req.body;
+    const { name, description, fileUrl } = req.body; // Now accepting fileUrl instead of file
     const sid = req.headers['x-sid'] || req.query.sid;
     
     if (!sid) {
       return res.status(401).json({ ok: false, error: 'Authentication required' });
     }
     
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: 'File required' });
+    if (!fileUrl) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'File URL required. Please upload to cloud storage first.' 
+      });
     }
     
     const db = await connectDB();
@@ -171,12 +162,9 @@ router.post('/:code/materials', materialUpload.single('file'), async (req, res) 
     // Create material object
     const material = {
       id: nanoid(),
-      name: name || req.file.originalname,
+      name: name || 'Unnamed Material',
       description: description || '',
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      path: `/uploads/materials/${req.file.filename}`,
-      size: req.file.size,
+      url: fileUrl, // Store cloud storage URL
       uploadedBy: sid,
       uploadedAt: new Date(),
       downloads: 0,
@@ -191,15 +179,15 @@ router.post('/:code/materials', materialUpload.single('file'), async (req, res) 
     res.json({ 
       ok: true, 
       data: material,
-      message: 'Material uploaded successfully' 
+      message: 'Material added successfully' 
     });
   } catch (err) {
-    console.error('Upload material error:', err);
+    console.error('Add material error:', err);
     res.status(500).json({ ok: false, error: 'Server error' });
   }
 });
 
-// GET /api/courses/:code/materials/:materialId/download - Download material
+// GET /api/courses/:code/materials/:materialId/download - Redirect to material URL
 router.get('/:code/materials/:materialId/download', async (req, res) => {
   try {
     const { code, materialId } = req.params;
@@ -221,14 +209,17 @@ router.get('/:code/materials/:materialId/download', async (req, res) => {
       { $inc: { 'materials.$.downloads': 1 } }
     );
     
-    const filePath = path.join(process.cwd(), 'uploads', 'materials', material.filename);
-    res.download(filePath, material.originalName);
+    // Redirect to the cloud storage URL
+    if (material.url) {
+      return res.redirect(material.url);
+    }
+    
+    res.status(404).json({ ok: false, error: 'Material URL not found' });
   } catch (err) {
     console.error('Download material error:', err);
     res.status(500).json({ ok: false, error: 'Server error' });
   }
 });
-
 
 // GET /api/courses/list - Get all courses with details
 router.get('/list', async (req, res) => {
@@ -407,6 +398,5 @@ router.get('/timetable/all', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-
 
 export default router;

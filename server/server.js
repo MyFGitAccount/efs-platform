@@ -1,9 +1,9 @@
+// server.js (updated)
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import fs from 'fs';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -24,15 +24,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '../uploads');
-const materialsDir = path.join(uploadsDir, 'materials');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-if (!fs.existsSync(materialsDir)) {
-  fs.mkdirSync(materialsDir, { recursive: true });
-}
+// Remove file system operations (not allowed in Vercel)
+// const uploadsDir = path.join(__dirname, '../uploads');
+// const materialsDir = path.join(uploadsDir, 'materials');
 
 // CORS configuration
 const allowedOrigins = process.env.NODE_ENV === 'production'
@@ -75,8 +69,8 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve uploads statically
-app.use('/uploads', express.static(uploadsDir));
+// Remove static file serving (not needed for MongoDB storage)
+// app.use('/uploads', express.static(uploadsDir));
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -100,15 +94,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Serve React build in production
-if (process.env.NODE_ENV === 'production') {
-  const clientDistPath = path.join(__dirname, '../client/dist');
-  
-  if (fs.existsSync(clientDistPath)) {
-    app.use(express.static(clientDistPath));
-  }
-}
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
@@ -118,18 +103,4 @@ app.use((err, req, res, next) => {
   });
 });
 
-/* vercel is serverless in production environemnt don't use app.listen 
-// For local development
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 3001;
-  app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`📁 API: http://localhost:${PORT}/api`);
-    console.log(`📁 Frontend: http://localhost:3000`);
-    console.log(`📁 Uploads: http://localhost:${PORT}/uploads`);
-  });
-}
-*/
-
-export default app
+export default app;

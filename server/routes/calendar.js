@@ -306,5 +306,4 @@ function darkenColor(color, percent) {
   ).toString(16).slice(1);
 }
 
-
 export default router;

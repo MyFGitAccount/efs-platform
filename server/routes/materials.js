@@ -1,60 +1,16 @@
 import express from 'express';
 import { ObjectId } from 'mongodb';
-//import dotenv from 'dotenv';
-import multer from 'multer';
-import path from 'path';
 import { nanoid } from 'nanoid';
-import fs from 'fs';
-import { promisify } from 'util';
 import connectDB from '../db/connection.js';
-
-//dotenv.config();
+import {
+  uploadToGridFS,
+  downloadFromGridFS,
+  getFileInfo,
+  deleteFromGridFS,
+  streamFileFromGridFS
+} from '../db/gridfs.js';
 
 const router = express.Router();
-
-// Promisify fs functions
-const unlinkAsync = promisify(fs.unlink);
-
-// Multer setup for material uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = 'uploads/materials/';
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}_${nanoid(10)}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/plain',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-    ];
-    
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Allowed: PDF, Word, Excel, PowerPoint, images, text'));
-    }
-  },
-});
 
 // Middleware to check authentication
 const requireAuth = async (req, res, next) => {
@@ -74,7 +30,8 @@ const requireAuth = async (req, res, next) => {
     req.user = user;
     next();
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error('Auth error:', err);
+    res.status(500).json({ ok: false, error: 'Authentication failed' });
   }
 };
 
@@ -102,14 +59,14 @@ router.get('/course/:code', async (req, res) => {
   }
 });
 
-// POST /api/materials/course/:code - Upload material to course
-router.post('/course/:code', requireAuth, upload.single('file'), async (req, res) => {
+// POST /api/materials/course/:code - Upload material to course (using Base64)
+router.post('/course/:code', requireAuth, async (req, res) => {
   try {
     const { code } = req.params;
-    const { name, description, tags } = req.body;
+    const { fileData, fileName, fileType, fileSize, name, description, tags } = req.body;
     
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: 'File required' });
+    if (!fileData || !fileName) {
+      return res.status(400).json({ ok: false, error: 'File data and file name are required' });
     }
     
     const db = await connectDB();
@@ -118,36 +75,50 @@ router.post('/course/:code', requireAuth, upload.single('file'), async (req, res
     // Check if course exists
     const course = await db.collection('courses').findOne({ code: upperCode });
     if (!course) {
-      // Clean up uploaded file
-      await unlinkAsync(req.file.path);
       return res.status(404).json({ ok: false, error: 'Course not found' });
     }
     
-    // Check if user is admin or instructor (for now, allow all authenticated users)
-    const isAdmin = req.user.role === 'admin';
-    const isInstructor = course.instructors?.includes(req.user.sid);
-    
-    if (!isAdmin && !isInstructor) {
-      // For now, allow any user to upload materials
-      // In production, you might want to restrict this
+    // Convert Base64 to buffer
+    let fileBuffer;
+    try {
+      const base64Data = fileData.includes('base64,') 
+        ? fileData.split(',')[1] 
+        : fileData;
+      fileBuffer = Buffer.from(base64Data, 'base64');
+    } catch (parseErr) {
+      return res.status(400).json({ ok: false, error: 'Invalid file data format' });
     }
+    
+    // Upload to GridFS
+    const gridFSResult = await uploadToGridFS(fileBuffer, fileName, {
+      originalName: fileName,
+      mimetype: fileType || 'application/octet-stream',
+      size: parseInt(fileSize) || fileBuffer.length,
+      uploadedBy: req.user.sid,
+      uploadedAt: new Date(),
+      courseCode: upperCode,
+      description: description || '',
+      tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim())) : [],
+      type: 'course_material'
+    });
     
     // Create material object
     const material = {
       id: nanoid(),
-      name: name || req.file.originalname,
+      name: name || fileName,
       description: description || '',
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      path: `/uploads/materials/${req.file.filename}`,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+      fileName: fileName,
+      originalName: fileName,
+      fileId: gridFSResult.fileId,
+      size: parseInt(fileSize) || fileBuffer.length,
+      mimetype: fileType || 'application/octet-stream',
+      tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim())) : [],
       uploadedBy: req.user.sid,
       uploadedAt: new Date(),
       downloads: 0,
       courseCode: upperCode,
       courseName: course.title,
+      storage: 'gridfs'
     };
     
     // Add material to course
@@ -169,78 +140,74 @@ router.post('/course/:code', requireAuth, upload.single('file'), async (req, res
     });
   } catch (err) {
     console.error('Upload material error:', err);
-    
-    // Clean up file if there was an error
-    if (req.file) {
-      try {
-        await unlinkAsync(req.file.path);
-      } catch (cleanupErr) {
-        console.error('File cleanup error:', cleanupErr);
-      }
-    }
-    
-    res.status(500).json({ ok: false, error: 'Server error' });
+    res.status(500).json({ ok: false, error: 'Failed to upload material: ' + err.message });
   }
 });
 
-// GET /api/materials/download/:materialId - Download material
-router.get('/download/:materialId', async (req, res) => {
+// GET /api/materials/download/:id - Download material
+router.get('/download/:id', async (req, res) => {
   try {
-    const { materialId } = req.params;
+    const { id } = req.params;
     const db = await connectDB();
     
-    // Find material in separate collection
-    const material = await db.collection('materials').findOne({ _id: materialId });
+    // Try to find by _id first, then by id field
+    let material = await db.collection('materials').findOne({ _id: id });
+    if (!material) {
+      material = await db.collection('materials').findOne({ id: id });
+    }
     
     if (!material) {
       return res.status(404).json({ ok: false, error: 'Material not found' });
     }
     
-    const filePath = path.join(process.cwd(), 'uploads', 'materials', material.filename);
-    
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ ok: false, error: 'File not found on server' });
+    // Get file info from GridFS
+    const fileInfo = await getFileInfo(material.fileId);
+    if (!fileInfo) {
+      return res.status(404).json({ ok: false, error: 'File not found in storage' });
     }
     
-    // Increment download count
-    await db.collection('materials').updateOne(
-      { _id: materialId },
-      { $inc: { downloads: 1 } }
-    );
-    
-    // Also update in course materials array
-    await db.collection('courses').updateOne(
-      { code: material.courseCode, 'materials.id': materialId },
-      { $inc: { 'materials.$.downloads': 1 } }
-    );
+    // Increment download count asynchronously
+    Promise.all([
+      db.collection('materials').updateOne(
+        { _id: material._id || material.id },
+        { $inc: { downloads: 1 } }
+      ),
+      db.collection('courses').updateOne(
+        { code: material.courseCode, 'materials.id': material.id },
+        { $inc: { 'materials.$.downloads': 1 } }
+      )
+    ]).catch(err => {
+      console.error('Error updating download count:', err);
+    });
     
     // Set headers for download
     res.setHeader('Content-Disposition', `attachment; filename="${material.originalName}"`);
     res.setHeader('Content-Type', material.mimetype);
+    res.setHeader('Content-Length', fileInfo.length);
+    res.setHeader('Cache-Control', 'no-cache');
     
-    // Stream the file
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+    // Stream file directly from GridFS to response
+    await streamFileFromGridFS(material.fileId, res);
     
-    fileStream.on('error', (err) => {
-      console.error('File stream error:', err);
-      res.status(500).json({ ok: false, error: 'Error streaming file' });
-    });
   } catch (err) {
     console.error('Download material error:', err);
-    res.status(500).json({ ok: false, error: 'Server error' });
+    if (!res.headersSent) {
+      res.status(500).json({ ok: false, error: 'Failed to download material' });
+    }
   }
 });
 
-// DELETE /api/materials/:materialId - Delete material
-router.delete('/:materialId', requireAuth, async (req, res) => {
+// DELETE /api/materials/:id - Delete material
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    const { materialId } = req.params;
+    const { id } = req.params;
     const db = await connectDB();
     
     // Find material
-    const material = await db.collection('materials').findOne({ _id: materialId });
+    let material = await db.collection('materials').findOne({ _id: id });
+    if (!material) {
+      material = await db.collection('materials').findOne({ id: id });
+    }
     
     if (!material) {
       return res.status(404).json({ ok: false, error: 'Material not found' });
@@ -260,16 +227,25 @@ router.delete('/:materialId', requireAuth, async (req, res) => {
     // Remove from course materials array
     await db.collection('courses').updateOne(
       { code: material.courseCode },
-      { $pull: { materials: { id: materialId } } }
+      { $pull: { materials: { id: material.id } } }
     );
     
     // Remove from materials collection
-    await db.collection('materials').deleteOne({ _id: materialId });
+    await db.collection('materials').deleteOne({ 
+      $or: [
+        { _id: material._id || material.id },
+        { id: material.id }
+      ]
+    });
     
-    // Delete the actual file
-    const filePath = path.join(process.cwd(), 'uploads', 'materials', material.filename);
-    if (fs.existsSync(filePath)) {
-      await unlinkAsync(filePath);
+    // Delete the file from GridFS
+    if (material.fileId && material.storage === 'gridfs') {
+      try {
+        await deleteFromGridFS(material.fileId);
+      } catch (deleteErr) {
+        console.error('Error deleting file from GridFS:', deleteErr);
+        // Continue even if GridFS deletion fails
+      }
     }
     
     res.json({ 
@@ -278,7 +254,7 @@ router.delete('/:materialId', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Delete material error:', err);
-    res.status(500).json({ ok: false, error: 'Server error' });
+    res.status(500).json({ ok: false, error: 'Failed to delete material' });
   }
 });
 
@@ -318,7 +294,10 @@ router.get('/search', async (req, res) => {
       .sort(sortOptions)
       .toArray();
     
-    res.json({ ok: true, data: materials });
+    // Remove fileId from response for security
+    const sanitizedMaterials = materials.map(({ fileId, storage, ...rest }) => rest);
+    
+    res.json({ ok: true, data: sanitizedMaterials });
   } catch (err) {
     console.error('Search materials error:', err);
     res.status(500).json({ ok: false, error: 'Server error' });
@@ -337,7 +316,10 @@ router.get('/popular', async (req, res) => {
       .limit(parseInt(limit))
       .toArray();
     
-    res.json({ ok: true, data: materials });
+    // Sanitize response
+    const sanitizedMaterials = materials.map(({ fileId, storage, ...rest }) => rest);
+    
+    res.json({ ok: true, data: sanitizedMaterials });
   } catch (err) {
     console.error('Get popular materials error:', err);
     res.status(500).json({ ok: false, error: 'Server error' });
@@ -356,7 +338,10 @@ router.get('/recent', async (req, res) => {
       .limit(parseInt(limit))
       .toArray();
     
-    res.json({ ok: true, data: materials });
+    // Sanitize response
+    const sanitizedMaterials = materials.map(({ fileId, storage, ...rest }) => rest);
+    
+    res.json({ ok: true, data: sanitizedMaterials });
   } catch (err) {
     console.error('Get recent materials error:', err);
     res.status(500).json({ ok: false, error: 'Server error' });
@@ -394,12 +379,19 @@ router.get('/stats', async (req, res) => {
       ]).toArray()
     ]);
     
+    // Sanitize most popular material
+    let sanitizedPopular = null;
+    if (mostPopularMaterial[0]) {
+      const { fileId, storage, ...rest } = mostPopularMaterial[0];
+      sanitizedPopular = rest;
+    }
+    
     res.json({
       ok: true,
       data: {
         totalMaterials,
         totalDownloads: totalDownloads[0]?.total || 0,
-        mostPopularMaterial: mostPopularMaterial[0] || null,
+        mostPopularMaterial: sanitizedPopular,
         topUploaders,
       }
     });
@@ -409,15 +401,18 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// PUT /api/materials/:materialId - Update material metadata
-router.put('/:materialId', requireAuth, async (req, res) => {
+// PUT /api/materials/:id - Update material metadata
+router.put('/:id', requireAuth, async (req, res) => {
   try {
-    const { materialId } = req.params;
+    const { id } = req.params;
     const { name, description, tags } = req.body;
     const db = await connectDB();
     
     // Find material
-    const material = await db.collection('materials').findOne({ _id: materialId });
+    let material = await db.collection('materials').findOne({ _id: id });
+    if (!material) {
+      material = await db.collection('materials').findOne({ id: id });
+    }
     
     if (!material) {
       return res.status(404).json({ ok: false, error: 'Material not found' });
@@ -436,7 +431,7 @@ router.put('/:materialId', requireAuth, async (req, res) => {
     
     const updates = {};
     
-    if (name) updates.name = name;
+    if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (tags !== undefined) {
       updates.tags = Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim());
@@ -446,13 +441,13 @@ router.put('/:materialId', requireAuth, async (req, res) => {
     
     // Update in materials collection
     await db.collection('materials').updateOne(
-      { _id: materialId },
+      { _id: material._id || material.id },
       { $set: updates }
     );
     
     // Update in course materials array
     await db.collection('courses').updateOne(
-      { code: material.courseCode, 'materials.id': materialId },
+      { code: material.courseCode, 'materials.id': material.id },
       { $set: Object.fromEntries(
         Object.entries(updates).map(([key, value]) => [`materials.$.${key}`, value])
       ) }
@@ -464,61 +459,36 @@ router.put('/:materialId', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Update material error:', err);
-    res.status(500).json({ ok: false, error: 'Server error' });
+    res.status(500).json({ ok: false, error: 'Failed to update material' });
   }
 });
 
-// Update the download endpoint in materials.js
-router.get('/download/:id', async (req, res) => {
+// GET /api/materials/preview/:id - Get material info without downloading
+router.get('/preview/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const db = await connectDB();
     
-    // Try to find by _id first (ObjectId)
-    let material;
-    try {
-      material = await db.collection('materials').findOne({ 
-        _id: id 
-      });
-    } catch (err) {
-      // If not ObjectId, try as string id
-      material = await db.collection('materials').findOne({ 
-        id: id 
-      });
-    }
-    
+    // Find material
+    let material = await db.collection('materials').findOne({ _id: id });
     if (!material) {
-      // Try to find in courses materials array
-      const course = await db.collection('courses').findOne({
-        'materials.id': id
-      });
-      
-      if (course) {
-        material = course.materials.find(m => m.id === id);
-      }
+      material = await db.collection('materials').findOne({ id: id });
     }
     
     if (!material) {
       return res.status(404).json({ ok: false, error: 'Material not found' });
     }
     
-    // Increment download count
-    await db.collection('materials').updateOne(
-      { _id: material._id || material.id },
-      { $inc: { downloads: 1 } }
-    );
+    // Return material info (without file data)
+    const { fileId, storage, ...materialInfo } = material;
     
-    const filePath = path.join(process.cwd(), 'uploads', 'materials', material.filename);
-    
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ ok: false, error: 'File not found on server' });
-    }
-    
-    res.download(filePath, material.originalName);
+    res.json({ 
+      ok: true, 
+      data: materialInfo 
+    });
   } catch (err) {
-    console.error('Download material error:', err);
-    res.status(500).json({ ok: false, error: 'Server error' });
+    console.error('Preview material error:', err);
+    res.status(500).json({ ok: false, error: 'Failed to get material info' });
   }
 });
 

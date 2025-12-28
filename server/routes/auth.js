@@ -1,37 +1,15 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import { MongoClient } from 'mongodb';
 //import dotenv from 'dotenv';
-import multer from 'multer';
-import path from 'path';
 import { nanoid } from 'nanoid';
 import brevo from '@getbrevo/brevo';
 import connectDB from '../db/connection.js';
+import { uploadToGridFS } from '../db/gridfs.js';  // Add GridFS import
 
 //dotenv.config();
 
 const router = express.Router();
-
-// Multer setup for photo uploads
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-      cb(null, `${Date.now()}_${nanoid(10)}${path.extname(file.originalname)}`);
-    },
-  }),
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images are allowed'));
-    }
-  },
-});
 
 // Generate secure token
 const generateUserToken = () => {
@@ -57,11 +35,14 @@ async function getAdminEmail(db) {
   return admin?.email || process.env.DEFAULT_ADMIN_EMAIL || 'khyhs0418@gmail.com';
 }
 
-// Send admin notification
-async function sendAdminNotification(sid, email, photoUrl, baseUrl) {
+// Send admin notification (updated for Base64 photo)
+async function sendAdminNotification(sid, email, photoFileId, baseUrl) {
   try {
     const db = await connectDB();
     const adminEmail = await getAdminEmail(db);
+
+    // Create photo URL that points to our API
+    const photoUrl = `${baseUrl}/api/upload/profile-photo/${photoFileId}`;
 
     const sendSmtpEmail = new brevo.SendSmtpEmail();
     sendSmtpEmail.sender = { name: 'EFS Platform', email: 'platformefs@gmail.com' };
@@ -111,7 +92,84 @@ async function sendAdminNotification(sid, email, photoUrl, baseUrl) {
   }
 }
 
-// POST /api/auth/login
+// POST /api/auth/register (updated for Base64)
+router.post('/register', async (req, res) => {
+  try {
+    const { sid, email, password, photoData, fileName = 'student_card.jpg' } = req.body;
+    
+    if (!sid || !email || !password || !photoData) {
+      return res.status(400).json({ ok: false, error: 'Missing required fields' });
+    }
+
+    const db = await connectDB();
+
+    // Check if user exists
+    const existingUser = await db.collection('users').findOne({ 
+      $or: [{ sid }, { email: email.toLowerCase() }] 
+    });
+    
+    const pendingUser = await db.collection('pending_accounts').findOne({ 
+      $or: [{ sid }, { email: email.toLowerCase() }] 
+    });
+
+    if (existingUser || pendingUser) {
+      return res.status(409).json({ 
+        ok: false, 
+        error: 'User already exists or pending approval' 
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Convert Base64 to buffer and upload to GridFS
+    let photoFileId;
+    try {
+      const base64Data = photoData.includes('base64,') 
+        ? photoData.split(',')[1] 
+        : photoData;
+      const fileBuffer = Buffer.from(base64Data, 'base64');
+      
+      const gridFSResult = await uploadToGridFS(fileBuffer, fileName, {
+        originalName: fileName,
+        mimetype: 'image/jpeg',
+        size: fileBuffer.length,
+        uploadedBy: sid,
+        uploadedAt: new Date(),
+        type: 'student_card',
+        status: 'pending_approval'
+      });
+      
+      photoFileId = gridFSResult.fileId;
+    } catch (gridfsErr) {
+      console.error('GridFS upload error:', gridfsErr);
+      return res.status(500).json({ ok: false, error: 'Failed to process photo' });
+    }
+
+    // Create pending account with GridFS file ID
+    const pendingAccount = {
+      sid,
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      photoFileId: photoFileId,  // Store GridFS file ID instead of path
+      createdAt: new Date(),
+    };
+
+    await db.collection('pending_accounts').insertOne(pendingAccount);
+
+    // Send admin notification
+    const baseUrl = req.get('origin') || process.env.BASE_URL || 'http://localhost:3000';
+    
+    await sendAdminNotification(sid, email, photoFileId, baseUrl);
+
+    res.json({ ok: true, message: 'Account request submitted. Awaiting admin approval.' });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ ok: false, error: 'Server error' });
+  }
+});
+
+// POST /api/auth/login (no changes needed)
 router.post('/login', async (req, res) => {
   try {
     const { email, sid, password } = req.body;
@@ -165,61 +223,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/register
-router.post('/register', upload.single('photo'), async (req, res) => {
-  try {
-    const { sid, email, password } = req.body;
-    
-    if (!sid || !email || !password || !req.file) {
-      return res.status(400).json({ ok: false, error: 'Missing required fields' });
-    }
-
-    const db = await connectDB();
-
-    // Check if user exists
-    const existingUser = await db.collection('users').findOne({ 
-      $or: [{ sid }, { email: email.toLowerCase() }] 
-    });
-    
-    const pendingUser = await db.collection('pending_accounts').findOne({ 
-      $or: [{ sid }, { email: email.toLowerCase() }] 
-    });
-
-    if (existingUser || pendingUser) {
-      return res.status(409).json({ 
-        ok: false, 
-        error: 'User already exists or pending approval' 
-      });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // Create pending account
-    const pendingAccount = {
-      sid,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      photo_path: `/uploads/${req.file.filename}`,
-      createdAt: new Date(),
-    };
-
-    await db.collection('pending_accounts').insertOne(pendingAccount);
-
-    // Send admin notification
-    const baseUrl = req.get('origin') || process.env.BASE_URL || 'http://localhost:3000';
-    const photoUrl = `${baseUrl}/uploads/${req.file.filename}`;
-    
-    await sendAdminNotification(sid, email, photoUrl, baseUrl);
-
-    res.json({ ok: true, message: 'Account request submitted. Awaiting admin approval.' });
-  } catch (err) {
-    console.error('Registration error:', err);
-    res.status(500).json({ ok: false, error: 'Server error' });
-  }
-});
-
-// GET /api/auth/me
+// GET /api/auth/me (no changes needed)
 router.get('/me', async (req, res) => {
   try {
     const sid = req.query.sid || req.headers['x-sid'];
@@ -243,13 +247,13 @@ router.get('/me', async (req, res) => {
   }
 });
 
-// POST /api/auth/logout
+// POST /api/auth/logout (no changes needed)
 router.post('/logout', (req, res) => {
   // Client-side logout (clear localStorage)
   res.json({ ok: true, message: 'Logged out successfully' });
 });
 
-// GET /api/auth/session - Check session
+// GET /api/auth/session - Check session (no changes needed)
 router.get('/session', async (req, res) => {
   try {
     const sid = req.headers['x-sid'] || req.query.sid;
@@ -279,7 +283,7 @@ router.get('/session', async (req, res) => {
   }
 });
 
-// GET /api/auth/user/:sid - Get user by SID
+// GET /api/auth/user/:sid - Get user by SID (no changes needed)
 router.get('/user/:sid', async (req, res) => {
   try {
     const { sid } = req.params;
@@ -301,7 +305,7 @@ router.get('/user/:sid', async (req, res) => {
   }
 });
 
-// GET /api/auth/check/:sid
+// GET /api/auth/check/:sid (no changes needed)
 router.get('/check/:sid', async (req, res) => {
   try {
     const { sid } = req.params;
@@ -319,6 +323,5 @@ router.get('/check/:sid', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-
 
 export default router;

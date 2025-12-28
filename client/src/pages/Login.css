@@ -234,3 +234,90 @@
     color: #888 !important;
   }
 }
+
+.divider {
+  text-align: center;
+  margin: 24px 0;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 8px;
+}
+
+.divider Text {
+  background: white;
+  padding: 0 16px;
+  position: relative;
+  top: 10px;
+}
+
+.login-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+}
+
+.links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.link-item {
+  color: #1890ff;
+  text-decoration: none;
+}
+
+.link-item:hover {
+  text-decoration: underline;
+}
+
+.separator {
+  color: #d9d9d9;
+}
+
+.demo-info {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 4px;
+}
+
+.create-course-prompt {
+  margin-top: 16px;
+}
+
+.actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  justify-content: center;
+}
+
+.action-btn {
+  padding: 0;
+  height: auto;
+}
+
+.login-info {
+  margin-top: 16px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.gradient-text {
+  background: linear-gradient(45deg, #1890ff, #722ed1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
