@@ -1,5 +1,4 @@
-//import { MongoClient } from 'mongodb';
-const MongoClient=require("mongodb");
+import { MongoClient } from 'mongodb';
 let client;
 let db;
 
@@ -17,5 +16,5 @@ const connectDB = async () => {
   return db;
 };
 
-module.exports = connectDB;
-//export default connectDB;
+
+export default connectDB;

@@ -1,9 +1,9 @@
-const express = require('express');
-const { ObjectId } = require('mongodb');
-const multer = require('multer');
-const path = require('path');
-const { nanoid } = require('nanoid');
-const connectDB = require('../db/connection.js');
+import express from 'express';
+import { ObjectId } from 'mongodb';
+import multer from 'multer';
+import path from 'path';
+import { nanoid } from 'nanoid';
+import connectDB from '../db/connection.js';
 
 //dotenv.config();
 
@@ -408,5 +408,5 @@ router.get('/timetable/all', async (req, res) => {
   }
 });
 
-module.exports = router;
-//export default router;
+
+export default router;

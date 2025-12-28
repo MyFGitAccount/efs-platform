@@ -1,16 +1,11 @@
-//import express from 'express';
-//import multer from 'multer';
-//import path from 'path';
-//import { nanoid } from 'nanoid';
-//import fs from 'fs';
+import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import { nanoid } from 'nanoid';
+import fs from 'fs';
 //import dotenv from 'dotenv';
-//import connectDB from '../db/connection.js';
-const express=require('express');
-const multer=require("multer");
-const path=require("path");
-const {nanoid}=require("nanoid");
-const fs=require("fs");
-const connectDB=require("../db/connection.js");
+import connectDB from '../db/connection.js';
+
 //dotenv.config();
 
 const router = express.Router();
@@ -175,5 +170,5 @@ router.post('/material', requireAuth, upload.single('file'), async (req, res) =>
   }
 });
 
-module.exports = router;
-//export default router;
+
+export default router;

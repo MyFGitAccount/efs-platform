@@ -1,20 +1,13 @@
-//import express from 'express';
-//import { ObjectId } from 'mongodb';
+import express from 'express';
+import { ObjectId } from 'mongodb';
 //import dotenv from 'dotenv';
-//import multer from 'multer';
-//import path from 'path';
-//import { nanoid } from 'nanoid';
-//import fs from 'fs';
-//import { promisify } from 'util';
-//import connectDB from '../db/connection.js';
-const express=require('express');
-const {ObjectId}=require('mongodb');
-const multer=require('multer');
-const path=require('path');
-const {nanoid}=require('nanoid');
-const fs=require('fs');
-const {promisify}=require('util');
-const connectDB=require('../db/connection.js');
+import multer from 'multer';
+import path from 'path';
+import { nanoid } from 'nanoid';
+import fs from 'fs';
+import { promisify } from 'util';
+import connectDB from '../db/connection.js';
+
 //dotenv.config();
 
 const router = express.Router();
@@ -529,5 +522,4 @@ router.get('/download/:id', async (req, res) => {
   }
 });
 
-module.exports = router;
-//export default router;
+export default router;

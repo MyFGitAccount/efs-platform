@@ -1,11 +1,13 @@
-const express = require('express');
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
-const multer = require('multer');
-const path = require('path');
-const { nanoid } = require('nanoid');
-const brevo = require('@getbrevo/brevo');
-const connectDB = require('../db/connection.js');
+import express from 'express';
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import { MongoClient } from 'mongodb';
+//import dotenv from 'dotenv';
+import multer from 'multer';
+import path from 'path';
+import { nanoid } from 'nanoid';
+import brevo from '@getbrevo/brevo';
+import connectDB from '../db/connection.js';
 
 //dotenv.config();
 
@@ -318,5 +320,5 @@ router.get('/check/:sid', async (req, res) => {
   }
 });
 
-module.exports = router;
-//export default router;
+
+export default router;
