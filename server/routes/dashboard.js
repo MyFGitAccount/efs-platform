@@ -1,7 +1,8 @@
-import express from 'express';
+//import express from 'express';
 //import dotenv from 'dotenv';
-import connectDB from '../db/connection.js';
-
+//import connectDB from '../db/connection.js';
+const express = require('express');
+const connectDB = require('../db/connection.js');
 //dotenv.config();
 
 const router = express.Router();
@@ -174,4 +175,5 @@ router.get('/quick-stats', requireAuth, async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
+//export default router;

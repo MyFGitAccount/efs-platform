@@ -1,26 +1,44 @@
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-import fs from 'fs';
+//import express from 'express';
+//import cors from 'cors';
+//import path from 'path';
+//import { fileURLToPath } from 'url';
+//import dotenv from 'dotenv';
+//import fs from 'fs';
+
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+//const {fileURLToPath}=require("url");
+const dotenv=require("dotenv");
+const fs = require('fs');
 
 // Import routes
-import authRoutes from './routes/auth.js';
-import courseRoutes from './routes/courses.js';
-import adminRoutes from './routes/admin.js';
-import groupRoutes from './routes/group.js';
-import questionnaireRoutes from './routes/questionnaire.js';
-import materialRoutes from './routes/materials.js';
-import calendarRoutes from './routes/calendar.js';
-import profileRoutes from './routes/profile.js';
-import dashboardRoutes from './routes/dashboard.js';
-import uploadRoutes from './routes/upload.js';
+//import authRoutes from './routes/auth.js';
+//import courseRoutes from './routes/courses.js';
+//import adminRoutes from './routes/admin.js';
+//import groupRoutes from './routes/group.js';
+//import questionnaireRoutes from './routes/questionnaire.js';
+//import materialRoutes from './routes/materials.js';
+//import calendarRoutes from './routes/calendar.js';
+//import profileRoutes from './routes/profile.js';
+//import dashboardRoutes from './routes/dashboard.js';
+//import uploadRoutes from './routes/upload.js';
+
+const authRoutes=require("./routes/auth.js");
+const courseRoutes=require("./routes/courses.js");
+const adminRoutes=require("./routes/admin.js");
+const groupRoutes=require("./routes/group.js");
+const questionnaireRoutes=require("./routes/questionnaire.js");
+const materialRoutes=require("./routes/materials.js");
+const calendarRoutes=require("./routes/calendar.js");
+const profileRoutes=require("./routes/profile.js");
+const dashboardRoutes=require("./routes/dashboard.js");
+const uploadRoutes=require("./routes/upload.js");
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+//const __filename = fileURLToPath(import.meta.url);
+//const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -131,4 +149,5 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 */
-export default app;
+module.exports = app;
+//export default app

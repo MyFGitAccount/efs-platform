@@ -1,8 +1,10 @@
-import express from 'express';
-import { ObjectId } from 'mongodb';
+//import express from 'express';
+//import { ObjectId } from 'mongodb';
 //import dotenv from 'dotenv';
-import connectDB from '../db/connection.js';
-
+//import connectDB from '../db/connection.js';
+const express=require('express');
+const {ObjectId}=require('mongodb');
+const connectDB=require('../db/connection.js');
 //dotenv.config();
 
 const router = express.Router();
@@ -212,4 +214,5 @@ router.post('/upload-photo', requireAuth, async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
+//export default router;

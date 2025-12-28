@@ -1,8 +1,7 @@
-import express from 'express';
-import { ObjectId } from 'mongodb';
-//import dotenv from 'dotenv';
-import crypto from 'crypto';
-import connectDB from '../db/connection.js';
+const express = require('express');
+const { ObjectId } = require('mongodb');
+const crypto = require('crypto');
+const connectDB = require('../db/connection.js');
 
 //dotenv.config();
 
@@ -353,4 +352,5 @@ router.delete('/users/:sid', async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
+//export default router;

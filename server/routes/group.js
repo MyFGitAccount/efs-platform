@@ -1,9 +1,12 @@
-import express from 'express';
-import { ObjectId } from 'mongodb';
+//import express from 'express';
+//import { ObjectId } from 'mongodb';
 //import dotenv from 'dotenv';
-import nodemailer from 'nodemailer';
-import connectDB from '../db/connection.js';
-
+//import nodemailer from 'nodemailer';
+//import connectDB from '../db/connection.js';
+const express = require('express');
+const connectDB = require('../db/connection.js');
+const nodemailer=require('nodemailer');
+const {ObjectId}=require('mongodb');
 //dotenv.config();
 
 const router = express.Router();
@@ -365,4 +368,5 @@ router.post('/requests/search', async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
+//export default router;
