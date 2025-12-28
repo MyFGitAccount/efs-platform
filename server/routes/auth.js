@@ -1,12 +1,12 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import { MongoClient } from 'mongodb';
 //import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import brevo from '@getbrevo/brevo';
+import connectDB from '../db/connection.js';
 
 //dotenv.config();
 
@@ -31,13 +31,6 @@ const upload = multer({
     }
   },
 });
-
-// Connect to MongoDB
-const connectDB = async () => {
-  const client = new MongoClient(process.env.MONGODB_URI);
-  await client.connect();
-  return client.db();
-};
 
 // Generate secure token
 const generateUserToken = () => {

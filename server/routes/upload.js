@@ -3,8 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import fs from 'fs';
-import { MongoClient } from 'mongodb';
 //import dotenv from 'dotenv';
+import connectDB from '../db/connection.js';
 
 //dotenv.config();
 
@@ -37,13 +37,6 @@ const upload = multer({
     }
   },
 });
-
-// Connect to MongoDB
-const connectDB = async () => {
-  const client = new MongoClient(process.env.MONGODB_URI);
-  await client.connect();
-  return client.db();
-};
 
 // Middleware to check authentication
 const requireAuth = async (req, res, next) => {

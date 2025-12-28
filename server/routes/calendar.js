@@ -1,17 +1,11 @@
 import express from 'express';
-import { MongoClient, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 //import dotenv from 'dotenv';
+import connectDB from '../db/connection.js';
 
 //dotenv.config();
 
 const router = express.Router();
-
-// Connect to MongoDB
-const connectDB = async () => {
-  const client = new MongoClient(process.env.MONGODB_URI);
-  await client.connect();
-  return client.db();
-};
 
 // Campus mapping
 const campusMap = {

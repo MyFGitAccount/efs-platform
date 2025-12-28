@@ -1,11 +1,12 @@
 import express from 'express';
-import { MongoClient, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 //import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import fs from 'fs';
 import { promisify } from 'util';
+import connectDB from '../db/connection.js';
 
 //dotenv.config();
 
@@ -54,13 +55,6 @@ const upload = multer({
     }
   },
 });
-
-// Connect to MongoDB
-const connectDB = async () => {
-  const client = new MongoClient(process.env.MONGODB_URI);
-  await client.connect();
-  return client.db();
-};
 
 // Middleware to check authentication
 const requireAuth = async (req, res, next) => {
