@@ -1,106 +1,101 @@
-// server.js (updated)
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-// Import routes
-import authRoutes from './routes/auth.js';
-import courseRoutes from './routes/courses.js';
-import adminRoutes from './routes/admin.js';
-import groupRoutes from './routes/group.js';
-import questionnaireRoutes from './routes/questionnaire.js';
-import materialRoutes from './routes/materials.js';
-import calendarRoutes from './routes/calendar.js';
-import profileRoutes from './routes/profile.js';
-import dashboardRoutes from './routes/dashboard.js';
-import uploadRoutes from './routes/upload.js';
-
+// Load environment variables
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Remove file system operations (not allowed in Vercel)
-// const uploadsDir = path.join(__dirname, '../uploads');
-// const materialsDir = path.join(uploadsDir, 'materials');
-
-// CORS configuration
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [
-      process.env.FRONTEND_URL,
-      'https://efs-platform.vercel.app',
-      'https://efs-platform-*.vercel.app',
-      'https://efs-platform-git-*.vercel.app'
-    ]
-  : [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:3001',
-      'http://127.0.0.1:3001'
-    ];
+// CORS configuration with better error handling
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'https://*.vercel.app',
+  'https://*.onrender.com',
+];
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.some(allowedOrigin => 
-      origin === allowedOrigin || 
-      allowedOrigin.includes('*') && 
-      origin.startsWith(allowedOrigin.split('*')[0])
-    )) {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.some(allowedOrigin => {
+      if (allowedOrigin.includes('*')) {
+        // Handle wildcard domains
+        const domainPattern = allowedOrigin.replace('*.', '');
+        return origin.includes(domainPattern);
+      }
+      return origin === allowedOrigin;
+    })) {
       callback(null, true);
     } else {
-      console.log('CORS blocked for origin:', origin);
+      console.log('Blocked by CORS:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
   optionsSuccessStatus: 200
 };
 
-// Apply CORS middleware
+// Use CORS middleware
 app.use(cors(corsOptions));
 
-// Body parsing middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Parse JSON and URL-encoded bodies
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Remove static file serving (not needed for MongoDB storage)
-// app.use('/uploads', express.static(uploadsDir));
+// Import routes
+import indexRouter from './routes/index.js';
+import authRouter from './routes/auth.js';
+import coursesRouter from './routes/courses.js';
+import calendarRouter from './routes/calendar.js';
 
 // API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/group', groupRoutes);
-app.use('/api/questionnaire', questionnaireRoutes);
-app.use('/api/materials', materialRoutes);
-app.use('/api/calendar', calendarRoutes);
-app.use('/api/profile', profileRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/upload', uploadRoutes);
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    ok: true, 
-    message: 'EFS Platform API is running',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
-});
+app.use('/api', indexRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/courses', coursesRouter);
+app.use('/api/calendar', calendarRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
-  res.status(500).json({ 
-    ok: false, 
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error' 
+  
+  // Handle CORS errors
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      ok: false,
+      error: 'CORS Error: Origin not allowed'
+    });
+  }
+  
+  // Handle other errors
+  res.status(500).json({
+    ok: false,
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
+});
+
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ ok: false, error: 'API endpoint not found' });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 export default app;
