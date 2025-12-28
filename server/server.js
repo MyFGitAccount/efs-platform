@@ -118,6 +118,7 @@ app.use((err, req, res, next) => {
   });
 });
 
+/*
 // For local development
 if (process.env.NODE_ENV !== 'production') {
   const PORT = process.env.PORT || 3001;
@@ -129,5 +130,5 @@ if (process.env.NODE_ENV !== 'production') {
     console.log(`📁 Uploads: http://localhost:${PORT}/uploads`);
   });
 }
-
+*/
 export default app;
